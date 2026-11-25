@@ -3,6 +3,8 @@ local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local TS = game:GetService("TweenService")
 local PG = P:WaitForChild("PlayerGui")
+local HS = game:GetService("HttpService")
+local TServ = game:GetService("TeleportService")
 
 -- ==== CONFIG ====
 local VALID_KEY = "miobeo123"
@@ -229,8 +231,9 @@ local function startMain()
     end
 
     local tabMain = createTab("Main", 0)
-    local tabMap = createTab("Map", 1)
-    local tabInfo = createTab("Info", 2)
+    local tabJoin = createTab("Join", 1)
+    local tabMap = createTab("Map", 2)
+    local tabInfo = createTab("Info", 3)
     switchTab(1)
     for i, tab in ipairs(tabs) do tab.btn.MouseButton1Click:Connect(function() switchTab(i) end) end
 
@@ -473,6 +476,31 @@ local function startMain()
         end)
     end
 
+    -- ==== LOGIC JOIN PLAYER ====
+    local function joinPlayer(input)
+        if not input or input == "" then return end
+        local success, err = pcall(function()
+            local userId = tonumber(input)
+            if not userId then
+                userId = P:GetUserIdFromNameAsync(input)
+            end
+            if not userId then error("Invalid user") end
+
+            local s, placeId, jobId = pcall(function()
+                return TServ:GetPlayerPlaceInstanceAsync(userId)
+            end)
+
+            if s and placeId and jobId then
+                TServ:TeleportToPlaceInstance(placeId, jobId, P)
+            else
+                error("Cannot find server. Player may be in a private server or has join permissions off.")
+            end
+        end)
+        if not success then
+            print("Join Error: " .. tostring(err))
+        end
+    end
+
     -- ==== UI ITEMS ====
     -- Tab Main
     createButton(tabMain, "⚡ TRIGGER FREEZE (LAG SWITCH)", doFreeze)
@@ -492,6 +520,10 @@ local function startMain()
             end)
         end
     end)
+
+    -- Tab Join
+    local joinBox = createTextBox(tabJoin, "Username hoặc UserId...", "")
+    createButton(tabJoin, "🌐 Join Player Server", function() joinPlayer(joinBox.Text) end)
 
     -- Tab Map
     local mapIdBox = createTextBox(tabMap, "Nhập Map ID...", "13336839729")
