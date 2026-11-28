@@ -9,6 +9,7 @@ local PG = P:WaitForChild("PlayerGui")
 -- ==========================================
 local TIKTOK_HANDLE = "@mio238987"     
 local SAVE_FILE = "mio_key.dat"
+local TIME_FILE = "mio_key_time.dat"
 local USED_KEYS_FILE = "mio_used_keys.dat"
 
 -- CHUỖI BASE64 CHỨA 1000 KEY (ĐÃ ĐƯỢC MÃ HOÁ)
@@ -30,6 +31,7 @@ local Loc = {
         buy_key = "IB TIKTOK ĐỂ MUA KEY VIP", copy_success = "Đã copy link TikTok! Nhắn tin để mua Key.",
         verify = "XÁC NHẬN", get_key = "LẤY KEY FREE", key_ph = "Nhập Key...", auth_title = "MIO HUB - XÁC THỰC",
         key_ok = "Thành công! Đang mở Menu...", key_fail = "Key sai hoặc đã được sử dụng!",
+        key_expired = "Key đã hết hạn sử dụng (quá 1 ngày)!",
         credit = "cre by mio"
     },
     en = {
@@ -39,13 +41,14 @@ local Loc = {
         buy_key = "DM TIKTOK TO BUY VIP", copy_success = "TikTok link copied! DM to buy.",
         verify = "VERIFY", get_key = "GET FREE KEY", key_ph = "Enter Key...", auth_title = "MIO HUB - AUTH",
         key_ok = "Success! Opening Menu...", key_fail = "Invalid or already used key!",
+        key_expired = "Key expired (over 1 day)!",
         credit = "cre by mio"
     }
 }
 local current_lang = "vi"
 
 -- ==========================================
--- BỘ GIẢI MÃ BASE64 & CHECK KEY
+-- BỘ GIẢI MÃ BASE64 & CHECK KEY (CÓ HẠN 1 NGÀY)
 -- ==========================================
 local function decodeB64(data)
     local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -86,12 +89,24 @@ local function markKeyAsUsed(k)
     end)
 end
 
+local function getKeyTime()
+    local ok, data = pcall(function()
+        if isfile and isfile(TIME_FILE) then return tonumber(readfile(TIME_FILE)) end
+    end)
+    return ok and data or nil
+end
+
+local function saveKeyTime(t)
+    pcall(function()
+        if writefile then writefile(TIME_FILE, tostring(t)) end
+    end)
+end
+
 local function checkKey(k)
-    if not k or k == "" then return false end
+    if not k or k == "" then return false, "fail" end
     local input_key = k:gsub("%s+", "")
     
     local raw_string = decodeB64(ENCODED_KEYS)
-    
     local is_valid = false
     for key in string.gmatch(raw_string, '([^,]+)') do
         if key == input_key then
@@ -100,15 +115,38 @@ local function checkKey(k)
         end
     end
     
-    if not is_valid then return false end
+    if not is_valid then return false, "fail" end
     
     local used_keys = getUsedKeys()
     if used_keys[input_key] then
-        return false 
+        return false, "fail"
     end
     
+    -- Nếu là lần đầu nhập key này, hoặc gọi hàm check lúc khởi động
+    -- Kiểm tra thời gian xem đã hết hạn chưa
+    local saved_time = getKeyTime()
+    if saved_time then
+        local current_time = os.time()
+        if (current_time - saved_time) > 86400 then -- 86400 giây = 1 ngày
+            -- Hết hạn, xoá key lưu máy
+            pcall(function() 
+                if delfile and isfile(SAVE_FILE) then delfile(SAVE_FILE) end
+                if delfile and isfile(TIME_FILE) then delfile(TIME_FILE) end
+            end)
+            return false, "expired"
+        end
+    end
+    
+    -- Đánh dấu đã dùng
     markKeyAsUsed(input_key)
-    return true
+    
+    -- Nếu nhập key mới thành công, lưu thời gian hiện tại
+    if not saved() or saved() ~= input_key then
+        save(input_key)
+        saveKeyTime(os.time())
+    end
+    
+    return true, "ok"
 end
 
 local function saved()
@@ -180,11 +218,16 @@ local function prompt(onOK)
     btn.MouseButton1Click:Connect(function()
         st.Text = "Checking..."; st.TextColor3 = Color3.fromRGB(255, 255, 150)
         task.spawn(function()
-            if checkKey(b.Text) then
-                save(b.Text); st.Text = t.key_ok; st.TextColor3 = Color3.fromRGB(150, 255, 150)
+            local success, msg = checkKey(b.Text)
+            if success then
+                st.Text = t.key_ok; st.TextColor3 = Color3.fromRGB(150, 255, 150)
                 task.wait(1); sg:Destroy(); onOK()
             else
-                st.Text = t.key_fail; st.TextColor3 = Color3.fromRGB(255, 100, 100)
+                if msg == "expired" then
+                    st.Text = t.key_expired; st.TextColor3 = Color3.fromRGB(255, 100, 100)
+                else
+                    st.Text = t.key_fail; st.TextColor3 = Color3.fromRGB(255, 100, 100)
+                end
             end
         end)
     end)
@@ -481,7 +524,6 @@ local function startMain()
         if freezing then return end
         freezing = true
         
-        -- Hiệu ứng nháy sáng cho nút LAG nổi nếu nó đang hiện
         if floatLagBtn.Visible then
             TS:Create(lagStroke, TweenInfo.new(0.05), {Color = Color3.fromRGB(255, 100, 100), Thickness = 4}):Play()
         end
@@ -497,7 +539,6 @@ local function startMain()
         freezing = false
     end
 
-    -- GẮN SỰ KIỆN CLICK CHO NÚT LAG NỔI
     floatLagBtn.MouseButton1Click:Connect(function()
         if not freezing then doFreeze() end
     end)
@@ -553,7 +594,6 @@ local function startMain()
     -- ==== UI ITEMS ====
     createButton(tabMain, t.freeze, doFreeze)
     
-    -- TOGGLE BẬT TẮT NÚT LAG NỔI
     createToggle(tabMain, t.float_lag, false, function(state)
         floatLagBtn.Visible = state
     end)
@@ -583,7 +623,6 @@ local function startMain()
         TextColor3 = C_SubText, Font = Enum.Font.Gotham, TextSize = 12, TextWrapped = true, LayoutOrder = 99
     }, tabInfo)
 
-    -- HIỆU ỨNG MỞ MENU
     main.Size = UDim2.new(0, 0, 0, 0)
     main.Rotation = -10
     TS:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 320), Rotation = 0}):Play()
@@ -591,4 +630,18 @@ end
 
 -- CHẠY SCRIPT
 local sk = saved()
-if sk and checkKey(sk) then startMain() else prompt(startMain) end
+if sk then 
+    local success, msg = checkKey(sk)
+    if success then 
+        startMain() 
+    else 
+        -- Nếu key cũ đã hết hạn hoặc bị lỗi, xoá và bắt nhập lại
+        pcall(function() 
+            if delfile and isfile(SAVE_FILE) then delfile(SAVE_FILE) end
+            if delfile and isfile(TIME_FILE) then delfile(TIME_FILE) end
+        end)
+        prompt(startMain) 
+    end
+else 
+    prompt(startMain) 
+end
