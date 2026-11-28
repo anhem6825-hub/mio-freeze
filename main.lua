@@ -3,20 +3,97 @@ local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local TS = game:GetService("TweenService")
 local PG = P:WaitForChild("PlayerGui")
+local HS = game:GetService("HttpService")
+local TServ = game:GetService("TeleportService")
 
--- ==========================================
--- CẤU HÌNH
--- ==========================================
-local TIKTOK_HANDLE = "@mio238987"     
+-- ==== CONFIG ====
+local VALID_KEY = "miobeo123"
 local SAVE_FILE = "mio_key.dat"
-local TIME_FILE = "mio_key_time.dat"
-local USED_KEYS_FILE = "mio_used_keys.dat"
--- ==========================================
--- MAIN UI (BLACK & WHITE ANIMATED HUB)
--- ==========================================
+local TIKTOK = "https://www.tiktok.com/@minhquang.1121"
+local TIKTOK_HANDLE = "@minhquang.1121"
+
+local CFG = {
+    FreezeDuration    = 0.15,
+    BasePower         = 70,
+    SlopeBonus        = 1.4,
+    HeightScale       = 0.12,
+    SpeedScale        = 0.15,
+    MaxPower          = 250,
+    AngleFromVertical = 45,
+    SpeedMultiplier   = 20,
+    MaxHorizSpeed     = 300,
+}
+
+-- ==== KEY GATE ====
+local function check(k)
+    if not k then return false end
+    return k:gsub("%s+", "") == VALID_KEY
+end
+local function saved()
+    local ok, r = pcall(function()
+        if isfile and isfile(SAVE_FILE) then return readfile(SAVE_FILE) end
+    end)
+    return ok and r or nil
+end
+local function save(k)
+    pcall(function() if writefile then writefile(SAVE_FILE, k) end end)
+end
+
+local function prompt(onOK)
+    if PG:FindFirstChild("MioKeyGate") then PG.MioKeyGate:Destroy() end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "MioKeyGate"; sg.ResetOnSpawn = false; sg.DisplayOrder = 1000; sg.IgnoreGuiInset = true
+    sg.Parent = PG
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(0, 320, 0, 230); f.Position = UDim2.fromScale(.5, .5); f.AnchorPoint = Vector2.new(.5, .5)
+    f.BackgroundColor3 = Color3.fromRGB(18, 18, 22); f.BorderSizePixel = 0; f.Parent = sg
+    Instance.new("UICorner", f).CornerRadius = UDim.new(.06, 0)
+    local s = Instance.new("UIStroke", f); s.Thickness = 2; s.Color = Color3.fromRGB(255, 50, 50)
+    
+    local title = Instance.new("TextLabel", f)
+    title.Size = UDim2.new(1, -20, 0, 24); title.Position = UDim2.new(0, 10, 0, 10); title.BackgroundTransparency = 1
+    title.Text = "MIO HUB - AUTH"; title.Font = Enum.Font.GothamBold; title.TextSize = 15; title.TextColor3 = Color3.fromRGB(230, 230, 230)
+    
+    local b = Instance.new("TextBox", f)
+    b.Size = UDim2.new(1, -20, 0, 36); b.Position = UDim2.new(0, 10, 0, 56); b.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    b.BorderSizePixel = 0; b.Text = ""; b.PlaceholderText = "Enter key"; b.Font = Enum.Font.Code; b.TextSize = 14
+    b.TextColor3 = Color3.fromRGB(220, 220, 220); b.ClearTextOnFocus = false
+    Instance.new("UICorner", b).CornerRadius = UDim.new(.1, 0)
+    
+    local btn = Instance.new("TextButton", f)
+    btn.Size = UDim2.new(1, -20, 0, 34); btn.Position = UDim2.new(0, 10, 0, 100); btn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    btn.BorderSizePixel = 0; btn.Text = "VERIFY"; btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(.1, 0)
+    
+    local buyBtn = Instance.new("TextButton", f)
+    buyBtn.Size = UDim2.new(1, -20, 0, 34); buyBtn.Position = UDim2.new(0, 10, 0, 144); buyBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+    buyBtn.BorderSizePixel = 0; buyBtn.Text = "BUY KEY — " .. TIKTOK_HANDLE; buyBtn.Font = Enum.Font.GothamBold; buyBtn.TextSize = 13; buyBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
+    Instance.new("UICorner", buyBtn).CornerRadius = UDim.new(.1, 0)
+    
+    local st = Instance.new("TextLabel", f)
+    st.Size = UDim2.new(1, -20, 0, 18); st.Position = UDim2.new(0, 10, 0, 184); st.BackgroundTransparency = 1
+    st.Text = ""; st.Font = Enum.Font.Gotham; st.TextSize = 11; st.TextColor3 = Color3.fromRGB(255, 120, 120)
+
+    buyBtn.MouseButton1Click:Connect(function()
+        pcall(function() setclipboard(TIKTOK) end)
+        st.Text = "Link copied! DM " .. TIKTOK_HANDLE; st.TextColor3 = Color3.fromRGB(150, 220, 150)
+    end)
+    btn.MouseButton1Click:Connect(function()
+        st.Text = "Checking..."; st.TextColor3 = Color3.fromRGB(220, 220, 150)
+        task.spawn(function()
+            if check(b.Text) then
+                save(b.Text); st.Text = "OK!"; st.TextColor3 = Color3.fromRGB(150, 220, 150)
+                task.wait(.4); sg:Destroy(); onOK()
+            else
+                st.Text = "Invalid key"; st.TextColor3 = Color3.fromRGB(255, 120, 120)
+            end
+        end)
+    end)
+end
+
+-- ==== MAIN UI & LOGIC ====
 local function startMain()
     if PG:FindFirstChild("MioHub") then PG.MioHub:Destroy() end
-    local t = Loc[current_lang]
     
     local function mk(cls, props, parent)
         local o = Instance.new(cls)
@@ -25,51 +102,46 @@ local function startMain()
         return o
     end
 
-    local C_Bg = Color3.fromRGB(12, 12, 12)
-    local C_Sidebar = Color3.fromRGB(18, 18, 18)
-    local C_Accent = Color3.fromRGB(255, 255, 255)
+    local C_Bg = Color3.fromRGB(15, 15, 18)
+    local C_Sidebar = Color3.fromRGB(20, 20, 24)
+    local C_Accent = Color3.fromRGB(220, 40, 40)
     local C_Text = Color3.fromRGB(240, 240, 240)
-    local C_SubText = Color3.fromRGB(140, 140, 140)
-    local C_Item = Color3.fromRGB(25, 25, 25)
+    local C_SubText = Color3.fromRGB(150, 150, 160)
+    local C_Item = Color3.fromRGB(30, 30, 36)
 
     local sg = mk("ScreenGui", {Name = "MioHub", ResetOnSpawn = false, DisplayOrder = 999, IgnoreGuiInset = true}, PG)
     
-    -- Main Frame
+    -- Window Chính
     local main = mk("Frame", {
-        Size = UDim2.new(0, 500, 0, 320), Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = C_Bg, BorderSizePixel = 0, ClipsDescendants = true
+        Size = UDim2.new(0, 500, 0, 320),
+        Position = UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = C_Bg, BorderSizePixel = 0
     }, sg)
     mk("UICorner", {CornerRadius = UDim.new(0.02, 0)}, main)
-    local mainStroke = mk("UIStroke", {Color = C_Accent, Thickness = 1.5, Transparency = 0.2}, main)
-    
-    task.spawn(function()
-        while main.Parent do
-            TS:Create(mainStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.8}):Play()
-            task.wait(1.5)
-            TS:Create(mainStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.2}):Play()
-            task.wait(1.5)
-        end
-    end)
+    local mainStroke = mk("UIStroke", {Color = C_Accent, Thickness = 1.5}, main)
 
+    -- Top Bar
     local topBar = mk("Frame", {Size = UDim2.new(1, 0, 0, 35), BackgroundTransparency = 1}, main)
     local titleLabel = mk("TextLabel", {
-        Size = UDim2.new(1, -100, 1, 0), Position = UDim2.new(0, 15, 0, 0),
-        BackgroundTransparency = 1, Text = "MIO HUB | WHITE EDITION", TextColor3 = C_Accent,
+        Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+        BackgroundTransparency = 1, Text = "MIO HUB | EVADE", TextColor3 = C_Accent,
         Font = Enum.Font.GothamBlack, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
     }, topBar)
 
-    local langBtn = mk("TextButton", {Size = UDim2.new(0, 35, 0, 25), Position = UDim2.new(1, -80, 0, 5), BackgroundColor3 = C_Item, Text = string.upper(current_lang), TextColor3 = C_Text, Font = Enum.Font.GothamBold, TextSize = 11, BorderSizePixel = 0}, topBar)
-    mk("UICorner", {CornerRadius = UDim.new(0.2, 0)}, langBtn)
-    langBtn.MouseButton1Click:Connect(function()
-        current_lang = (current_lang == "vi" and "en") or "vi"
-        startMain()
-    end)
-
-    -- NÚT MIO (MỞ MENU)
+    -- Nút Mở Lại (Nút MIO)
     local floatBtn = mk("TextButton", {
-        Size = UDim2.new(0, 70, 0, 30), Position = UDim2.new(0, 20, 0, 20),
-        BackgroundColor3 = C_Bg, Text = "MIO", TextColor3 = C_Accent, Font = Enum.Font.GothamBlack,
-        TextSize = 12, BorderSizePixel = 0, AutoButtonColor = false, Visible = false, ZIndex = 10
+        Size = UDim2.new(0, 70, 0, 30),
+        Position = UDim2.new(0, 20, 0, 20),
+        BackgroundColor3 = C_Bg,
+        Text = "MIO",
+        TextColor3 = C_Accent,
+        Font = Enum.Font.GothamBlack,
+        TextSize = 12,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Visible = false,
+        ZIndex = 10
     }, sg)
     mk("UICorner", {CornerRadius = UDim.new(0.2, 0)}, floatBtn)
     mk("UIStroke", {Color = C_Accent, Thickness = 1.5}, floatBtn)
@@ -81,7 +153,9 @@ local function startMain()
         end
     end)
     floatBtn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then fbDrag = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            fbDrag = false
+        end
     end)
     UIS.InputChanged:Connect(function(input)
         if fbDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -89,36 +163,16 @@ local function startMain()
             floatBtn.Position = UDim2.new(fbPos.X.Scale, fbPos.X.Offset + d.X, fbPos.Y.Scale, fbPos.Y.Offset + d.Y)
         end
     end)
-    floatBtn.MouseButton1Click:Connect(function() main.Visible = true; floatBtn.Visible = false end)
-
-    -- NÚT LAG NỔI (MỚI)
-    local floatLagBtn = mk("TextButton", {
-        Size = UDim2.new(0, 60, 0, 60), Position = UDim2.new(1, -80, 1, -100),
-        BackgroundColor3 = C_Bg, Text = "LAG", TextColor3 = C_Accent, Font = Enum.Font.GothamBlack,
-        TextSize = 14, BorderSizePixel = 0, AutoButtonColor = false, Visible = false, ZIndex = 15
-    }, sg)
-    mk("UICorner", {CornerRadius = UDim.new(0.5, 0)}, floatLagBtn) -- Hình tròn
-    local lagStroke = mk("UIStroke", {Color = C_Accent, Thickness = 2}, floatLagBtn)
-
-    local flDrag, flStart, flPos
-    floatLagBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            flDrag, flStart, flPos = true, input.Position, floatLagBtn.Position
-        end
-    end)
-    floatLagBtn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then flDrag = false end
-    end)
-    UIS.InputChanged:Connect(function(input)
-        if flDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local d = input.Position - flStart
-            floatLagBtn.Position = UDim2.new(flPos.X.Scale, flPos.X.Offset + d.X, flPos.Y.Scale, flPos.Y.Offset + d.Y)
-        end
+    floatBtn.MouseButton1Click:Connect(function()
+        main.Visible = true
+        floatBtn.Visible = false
     end)
 
+    -- Nút Close
     local btnClose = mk("TextButton", {Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -35, 0, 2), BackgroundTransparency = 1, Text = "X", TextColor3 = C_SubText, Font = Enum.Font.GothamBold, TextSize = 14}, topBar)
     btnClose.MouseButton1Click:Connect(function() main.Visible = false; floatBtn.Visible = true end)
 
+    -- Phím tắt RightShift bật/tắt Menu
     UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.RightShift then
@@ -127,20 +181,24 @@ local function startMain()
         end
     end)
     
+    -- Sidebar
     local sidebar = mk("Frame", {Size = UDim2.new(0, 130, 1, -45), Position = UDim2.new(0, 10, 0, 40), BackgroundColor3 = C_Sidebar, BorderSizePixel = 0}, main)
     mk("UICorner", {CornerRadius = UDim.new(0.04, 0)}, sidebar)
     
     mk("TextLabel", {
         Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 1, -25), BackgroundTransparency = 1,
-        Text = t.credit, TextColor3 = C_SubText, Font = Enum.Font.GothamBold, TextSize = 12, TextTransparency = 0.4
+        Text = "cre by mio", TextColor3 = C_Accent, Font = Enum.Font.GothamBold, TextSize = 12, TextTransparency = 0.3
     }, sidebar)
     
+    -- Content
     local content = mk("ScrollingFrame", {
         Size = UDim2.new(1, -160, 1, -45), Position = UDim2.new(0, 150, 0, 40),
-        BackgroundTransparency = 1, ScrollBarThickness = 2, ScrollBarImageColor3 = C_Accent, CanvasSize = UDim2.new(0, 0, 1, 0)
+        BackgroundTransparency = 1, ScrollBarThickness = 2, ScrollBarImageColor3 = C_Accent,
+        CanvasSize = UDim2.new(0, 0, 1, 0)
     }, main)
     mk("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, content)
 
+    -- Tabs
     local tabs = {}
     local function createTab(name, order)
         local btn = mk("TextButton", {
@@ -151,12 +209,9 @@ local function startMain()
         }, sidebar)
         mk("UICorner", {CornerRadius = UDim.new(0.1, 0)}, btn)
         
-        local origPos = btn.Position
-        btn.Position = UDim2.new(-1, 0, origPos.Y.Scale, origPos.Y.Offset)
-        TS:Create(btn, TweenInfo.new(0.4 + (order*0.1), Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = origPos}):Play()
-
         local page = mk("Frame", {Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, Visible = false}, content)
         mk("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, page)
+        
         table.insert(tabs, {btn = btn, page = page})
         return page
     end
@@ -164,30 +219,36 @@ local function startMain()
     local function switchTab(index)
         for i, tab in ipairs(tabs) do
             if i == index then
-                TS:Create(tab.btn, TweenInfo.new(0.2), {BackgroundColor3 = C_Accent, TextColor3 = C_Bg}):Play()
+                tab.btn.BackgroundColor3 = C_Accent
+                tab.btn.TextColor3 = C_Text
                 tab.page.Visible = true
             else
-                TS:Create(tab.btn, TweenInfo.new(0.2), {BackgroundColor3 = C_Item, TextColor3 = C_SubText}):Play()
+                tab.btn.BackgroundColor3 = C_Item
+                tab.btn.TextColor3 = C_SubText
                 tab.page.Visible = false
             end
         end
     end
 
-    local tabMain = createTab(t.tab_main, 0)
-    local tabMap = createTab(t.tab_map, 1)
-    local tabInfo = createTab(t.tab_info, 2)
+    local tabMain = createTab("Main", 0)
+    local tabJoin = createTab("Join", 1)
+    local tabMap = createTab("Map", 2)
+    local tabInfo = createTab("Info", 3)
     switchTab(1)
     for i, tab in ipairs(tabs) do tab.btn.MouseButton1Click:Connect(function() switchTab(i) end) end
 
+    -- Components
     local function createButton(parent, text, callback)
         local b = mk("TextButton", {
-            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C_Item, Text = text, TextColor3 = C_Text,
-            Font = Enum.Font.GothamBold, TextSize = 13, BorderSizePixel = 0, AutoButtonColor = false, LayoutOrder = #parent:GetChildren()
+            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C_Item,
+            Text = text, TextColor3 = C_Text, Font = Enum.Font.GothamBold, TextSize = 13,
+            BorderSizePixel = 0, AutoButtonColor = false, LayoutOrder = #parent:GetChildren()
         }, parent)
         mk("UICorner", {CornerRadius = UDim.new(0.1, 0)}, b)
-        local stroke = mk("UIStroke", {Color = C_Accent, Thickness = 1, Transparency = 0.8}, b)
-        b.MouseEnter:Connect(function() TS:Create(stroke, TweenInfo.new(0.1), {Transparency = 0}):Play(); b.BackgroundColor3 = Color3.fromRGB(40, 40, 40) end)
-        b.MouseLeave:Connect(function() TS:Create(stroke, TweenInfo.new(0.1), {Transparency = 0.8}):Play(); b.BackgroundColor3 = C_Item end)
+        local stroke = mk("UIStroke", {Color = C_Accent, Thickness = 1, Transparency = 0.5}, b)
+        
+        b.MouseEnter:Connect(function() TS:Create(stroke, TweenInfo.new(0.1), {Transparency = 0}):Play(); b.BackgroundColor3 = Color3.fromRGB(40, 40, 48) end)
+        b.MouseLeave:Connect(function() TS:Create(stroke, TweenInfo.new(0.1), {Transparency = 0.5}):Play(); b.BackgroundColor3 = C_Item end)
         b.MouseButton1Click:Connect(callback)
         return b
     end
@@ -196,20 +257,22 @@ local function startMain()
         local f = mk("Frame", {Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C_Item, LayoutOrder = #parent:GetChildren()}, parent)
         mk("UICorner", {CornerRadius = UDim.new(0.1, 0)}, f)
         mk("TextLabel", {Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = text, TextColor3 = C_Text, Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left}, f)
-        local switchBg = mk("Frame", {Size = UDim2.new(0, 36, 0, 20), Position = UDim2.new(1, -46, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = default and C_Accent or Color3.fromRGB(60, 60, 60)}, f)
+        
+        local switchBg = mk("Frame", {Size = UDim2.new(0, 36, 0, 20), Position = UDim2.new(1, -46, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = default and C_Accent or Color3.fromRGB(60, 60, 70)}, f)
         mk("UICorner", {CornerRadius = UDim.new(1, 0)}, switchBg)
-        local knob = mk("Frame", {Size = UDim2.new(0, 16, 0, 16), Position = default and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 2, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = default and C_Bg or C_Accent}, switchBg)
+        local knob = mk("Frame", {Size = UDim2.new(0, 16, 0, 16), Position = default and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 2, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = C_Text}, switchBg)
         mk("UICorner", {CornerRadius = UDim.new(1, 0)}, knob)
+        
         local state = default
         local btnHit = mk("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = ""}, f)
         btnHit.MouseButton1Click:Connect(function()
             state = not state
             if state then
                 TS:Create(switchBg, TweenInfo.new(0.15), {BackgroundColor3 = C_Accent}):Play()
-                TS:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(1, -18, 0.5, 0), BackgroundColor3 = C_Bg}):Play()
+                TS:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(1, -18, 0.5, 0)}):Play()
             else
-                TS:Create(switchBg, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
-                TS:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(0, 2, 0.5, 0), BackgroundColor3 = C_Accent}):Play()
+                TS:Create(switchBg, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
+                TS:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(0, 2, 0.5, 0)}):Play()
             end
             if callback then callback(state) end
         end)
@@ -219,11 +282,12 @@ local function startMain()
     local function createTextBox(parent, placeholder, default)
         local f = mk("Frame", {Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C_Item, LayoutOrder = #parent:GetChildren()}, parent)
         mk("UICorner", {CornerRadius = UDim.new(0.1, 0)}, f)
-        local tb = mk("TextBox", {Size = UDim2.new(1, -20, 1, -10), Position = UDim2.new(0, 10, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = Color3.fromRGB(10, 10, 10), Text = default, PlaceholderText = placeholder, TextColor3 = C_Text, Font = Enum.Font.Code, TextSize = 13, ClearTextOnFocus = false}, f)
+        local tb = mk("TextBox", {Size = UDim2.new(1, -20, 1, -10), Position = UDim2.new(0, 10, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = Color3.fromRGB(20, 20, 25), Text = default, PlaceholderText = placeholder, TextColor3 = C_Text, Font = Enum.Font.Code, TextSize = 13, ClearTextOnFocus = false}, f)
         mk("UICorner", {CornerRadius = UDim.new(0.1, 0)}, tb)
         return tb
     end
 
+    -- KÉO THẢ & KHOÁ
     local dragging, dragInput, dragStart, startPos
     local isLocked = false
     local holdStart = nil
@@ -231,20 +295,32 @@ local function startMain()
 
     topBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            holdStart = tick(); dragging = true; dragStart = input.Position; startPos = main.Position
+            holdStart = tick()
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
             local thisHold = holdStart
             task.delay(HOLD_TIME, function()
                 if dragging and holdStart == thisHold then
-                    isLocked = not isLocked; dragging = false; holdStart = nil
+                    isLocked = not isLocked
+                    dragging = false
+                    holdStart = nil
                     if isLocked then
-                        titleLabel.Text = "MIO HUB | LOCKED 🔒"; titleLabel.TextColor3 = Color3.fromRGB(255, 100, 100); mainStroke.Color = Color3.fromRGB(255, 100, 100)
+                        titleLabel.Text = "MIO HUB | LOCKED 🔒"
+                        titleLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                        mainStroke.Color = Color3.fromRGB(255, 100, 100)
                     else
-                        titleLabel.Text = "MIO HUB | WHITE EDITION"; titleLabel.TextColor3 = C_Accent; mainStroke.Color = C_Accent
+                        titleLabel.Text = "MIO HUB | EVADE"
+                        titleLabel.TextColor3 = C_Accent
+                        mainStroke.Color = C_Accent
                     end
                 end
             end)
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false; holdStart = nil end
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    holdStart = nil
+                end
             end)
         end
     end)
@@ -260,6 +336,7 @@ local function startMain()
         end
     end)
 
+    -- ==== LOGIC FREEZE ====
     local freezing = false
     local function hrp()
         local c = P.Character; local h = c and c:FindFirstChildOfClass("Humanoid")
@@ -297,30 +374,46 @@ local function startMain()
         if fh.Magnitude > CFG.MaxHorizSpeed then fh = fh.Unit * CFG.MaxHorizSpeed end
         r.AssemblyLinearVelocity = Vector3.new(fh.X, newV.Y, fh.Z)
     end
-    
     local function doFreeze()
         if freezing then return end
         freezing = true
-        
-        if floatLagBtn.Visible then
-            TS:Create(lagStroke, TweenInfo.new(0.05), {Color = Color3.fromRGB(255, 100, 100), Thickness = 4}):Play()
-        end
-        
-        local overlay = mk("Frame", {Size = UDim2.fromScale(1,1), BackgroundColor3 = Color3.new(0,0,0), BackgroundTransparency = 0.6, ZIndex = 20}, sg)
-        local t2 = os.clock(); while os.clock() - t2 < CFG.FreezeDuration do end
-        launch(); overlay:Destroy(); 
-        
-        if floatLagBtn.Visible then
-            TS:Create(lagStroke, TweenInfo.new(0.1), {Color = C_Accent, Thickness = 2}):Play()
-        end
-        
+        local overlay = mk("Frame", {Size = UDim2.fromScale(1,1), BackgroundColor3 = Color3.new(0,0,0), BackgroundTransparency = 0.5, ZIndex = 20}, sg)
+        local t = os.clock(); while os.clock() - t < CFG.FreezeDuration do end
+        launch()
+        overlay:Destroy()
         freezing = false
     end
 
-    floatLagBtn.MouseButton1Click:Connect(function()
-        if not freezing then doFreeze() end
+    -- ==== LOGIC EASY TRIMP ====
+    local trimpEnabled = false
+    local lastTrimpTime = 0
+    RS.Heartbeat:Connect(function()
+        if not trimpEnabled then return end
+        local now = tick()
+        if now - lastTrimpTime < 0.4 then return end 
+        local c = P.Character
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        local r = c and c:FindFirstChild("HumanoidRootPart")
+        if not h or not r or h.Health <= 0 then return end
+        local state = h:GetState()
+        if state ~= Enum.HumanoidStateType.Landed and state ~= Enum.HumanoidStateType.Running and state ~= Enum.HumanoidStateType.RunningNoPhysics then return end
+        local rp = RaycastParams.new()
+        rp.FilterType = Enum.RaycastFilterType.Exclude
+        rp.FilterDescendantsInstances = {c}
+        local hit = workspace:Raycast(r.Position, Vector3.new(0, -8, 0), rp)
+        if hit and hit.Normal.Y < 0.95 and hit.Normal.Y > 0.1 then
+            local v = r.AssemblyLinearVelocity
+            local hs = Vector3.new(v.X, 0, v.Z).Magnitude
+            if hs > 12 then 
+                local boost = hs * 1.5 + 40
+                boost = math.min(boost, CFG.MaxPower) 
+                r.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, 0) + boost, v.Z)
+                lastTrimpTime = now
+            end
+        end
     end)
 
+    -- ==== LOGIC EDGE BOOST ====
     local edgeBoostEnabled = false
     local edgePower = 100
     local edgeMinFall = 1.0
@@ -336,7 +429,9 @@ local function startMain()
     end
     RS.Stepped:Connect(function()
         if not edgeBoostEnabled then return end
-        local c = P.Character; local h = c and c:FindFirstChildOfClass("Humanoid"); local r = c and c:FindFirstChild("HumanoidRootPart")
+        local c = P.Character
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        local r = c and c:FindFirstChild("HumanoidRootPart")
         if not h or not r or h.Health <= 0 then return end
         if r.AssemblyLinearVelocity.Y < -edgeMinFall then
             local t_parts = r:GetTouchingParts()
@@ -351,33 +446,67 @@ local function startMain()
         end
     end)
 
+    -- ==== LOGIC FAKE MAP ====
     local function loadFakeMap(mapId)
         if not mapId or mapId == "" then return end
-        local char = P.Character; local root = char and char:FindFirstChild("HumanoidRootPart")
+        local char = P.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
-        root.Anchored = true; local originalPos = root.Position
+
+        root.Anchored = true
+        local originalPos = root.Position
         root.CFrame = CFrame.new(root.Position.X, 5000, root.Position.Z)
+
         task.spawn(function()
             local success, objs = pcall(function() return game:GetObjects("rbxassetid://" .. mapId) end)
             if success and objs[1] then
-                local map = objs[1]; map.Parent = workspace; task.wait(1)
+                local map = objs[1]
+                map.Parent = workspace
+                task.wait(1)
                 local targetPart = map:FindFirstChildWhichIsA("BasePart", true)
-                if targetPart then root.CFrame = targetPart.CFrame + Vector3.new(0, 5, 0)
-                else root.CFrame = CFrame.new(0, 10, 0) end
-            else root.CFrame = CFrame.new(originalPos) end
+                if targetPart then
+                    root.CFrame = targetPart.CFrame + Vector3.new(0, 5, 0)
+                else
+                    root.CFrame = CFrame.new(0, 10, 0)
+                end
+            else
+                root.CFrame = CFrame.new(originalPos)
+            end
             root.Anchored = false
         end)
     end
 
-    -- ==== UI ITEMS ====
-    createButton(tabMain, t.freeze, doFreeze)
-    
-    createToggle(tabMain, t.float_lag, false, function(state)
-        floatLagBtn.Visible = state
-    end)
+    -- ==== LOGIC JOIN PLAYER ====
+    local function joinPlayer(input)
+        if not input or input == "" then return end
+        local success, err = pcall(function()
+            local userId = tonumber(input)
+            if not userId then
+                userId = P:GetUserIdFromNameAsync(input)
+            end
+            if not userId then error("Invalid user") end
 
-    createToggle(tabMain, t.edge, false, function(state) edgeBoostEnabled = state end)
-    createToggle(tabMain, t.aj, false, function(state)
+            local s, placeId, jobId = pcall(function()
+                return TServ:GetPlayerPlaceInstanceAsync(userId)
+            end)
+
+            if s and placeId and jobId then
+                TServ:TeleportToPlaceInstance(placeId, jobId, P)
+            else
+                error("Cannot find server. Player may be in a private server or has join permissions off.")
+            end
+        end)
+        if not success then
+            print("Join Error: " .. tostring(err))
+        end
+    end
+
+    -- ==== UI ITEMS ====
+    -- Tab Main
+    createButton(tabMain, "⚡ TRIGGER FREEZE (LAG SWITCH)", doFreeze)
+    createToggle(tabMain, "Easy Trimp (Auto Bounce)", false, function(state) trimpEnabled = state end)
+    createToggle(tabMain, "Edge Boost", false, function(state) edgeBoostEnabled = state end)
+    createToggle(tabMain, "Auto Jump", false, function(state)
         if state then
             task.spawn(function()
                 while state do
@@ -392,34 +521,25 @@ local function startMain()
         end
     end)
 
-    local mapIdBox = createTextBox(tabMap, t.map_ph, "13336839729")
-    createButton(tabMap, t.map_btn, function() loadFakeMap(mapIdBox.Text) end)
+    -- Tab Join
+    local joinBox = createTextBox(tabJoin, "Username hoặc UserId...", "")
+    createButton(tabJoin, "🌐 Join Player Server", function() joinPlayer(joinBox.Text) end)
 
+    -- Tab Map
+    local mapIdBox = createTextBox(tabMap, "Nhập Map ID...", "13336839729")
+    createButton(tabMap, "🏗️ Load Fake Map (Obby)", function() loadFakeMap(mapIdBox.Text) end)
+
+    -- Tab Info
     mk("TextLabel", {
         Size = UDim2.new(1, 0, 0, 60), BackgroundTransparency = 1, 
-        Text = "MIO HUB\n" .. t.credit .. "\nTikTok: " .. TIKTOK_HANDLE, 
+        Text = "MIO HUB\ncre by mio\nTikTok: " .. TIKTOK_HANDLE, 
         TextColor3 = C_SubText, Font = Enum.Font.Gotham, TextSize = 12, TextWrapped = true, LayoutOrder = 99
     }, tabInfo)
 
+    -- Intro Animation
     main.Size = UDim2.new(0, 0, 0, 0)
-    main.Rotation = -10
-    TS:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 320), Rotation = 0}):Play()
+    TS:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 320)}):Play()
 end
 
--- CHẠY SCRIPT
 local sk = saved()
-if sk then 
-    local success, msg = checkKey(sk)
-    if success then 
-        startMain() 
-    else 
-        -- Nếu key cũ đã hết hạn hoặc bị lỗi, xoá và bắt nhập lại
-        pcall(function() 
-            if delfile and isfile(SAVE_FILE) then delfile(SAVE_FILE) end
-            if delfile and isfile(TIME_FILE) then delfile(TIME_FILE) end
-        end)
-        prompt(startMain) 
-    end
-else 
-    prompt(startMain) 
-end
+if sk and check(sk) then startMain() else prompt(startMain) end
